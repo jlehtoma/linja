@@ -77,7 +77,7 @@ levels(d2$D_2015) <- c(levels(d2$D_2015), "Vapaa")
 d2$D_2015[d2$D_2015 == '-'] <- 'Vapaa'
 droplevels(d2$D_2015)
 
-#Muuta spatiaaliseksi dataksi 
+#Convert to spatial data 
 sp_data <- SpatialPointsDataFrame(coords=dplyr::select(d2, Long, Lat),
                                   data=d2, proj4string=CRS("+init=epsg:2393"))
 #Fix coordinates
@@ -86,11 +86,8 @@ sp_data_wgs84 <- spTransform(sp_data, CRS("+init=epsg:4326"))
 #create color palette for factor data
 pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
 
-# you can also explicitly use Lat and Long '<a href="http://google.com">Link</a>')
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius= 1,color = ~pal(D_2015),popup=sp_data_wgs84$Kunta)
-
+# make a leaflet plot for data, plot wheter line transect is available or not, 
+# add popåups, line transect map and form 
 paikka<-sp_data_wgs84$Kunta
 urli<-sp_data_wgs84$map_pdf_url
 formi<-sp_data_wgs84$form_pdf_url
@@ -101,9 +98,9 @@ leaflet(sp_data_wgs84) %>%
                        popup=(paste0("<a href=", urli , ">", paikka,"</a>","<br />","<a href=", formi , ">","Maastolomake" ,"</a>")))
 
 
-
-
-
+##################################################
+#####end of code rest is blubber.
+##################################################
 
 
 

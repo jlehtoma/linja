@@ -103,6 +103,12 @@ leaflet(sp_data_wgs84) %>%
 
 
 
+
+
+
+
+
+
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
       addCircleMarkers(radius= 1,color = ~pal(2015),popup='<a href="">Link</a>')

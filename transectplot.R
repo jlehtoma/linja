@@ -5,6 +5,7 @@ library("magrittr")
 library("rvest")
 library(maps)
 library(rgdal)
+library(leaflet)
 
 #Get the url for the table
 urls <- c("http://koivu.luomus.fi/seurannat/linjalaskenta/vakiolinjat.php")
@@ -18,6 +19,27 @@ data<-taulukko %>%
 #Change the crappy names for variables
 data$D_2015<-as.factor(data$`2015`)
 data$Kunta<-data$`Kunta ja reitin nimi`
+
+data$Y_2006 <- as.numeric(ifelse(data$`2006`== "-",
+                      "0","1"))
+data$Y_2007 <- as.numeric(ifelse(data$`2007`== "-",
+                      "0","1"))
+data$Y_2008 <- as.numeric(ifelse(data$`2008`== "-",
+                      "0","1"))
+data$Y_2009 <- as.numeric(ifelse(data$`2009`== "-",
+                      "0","1"))
+data$Y_2010 <- as.numeric(ifelse(data$`2010`== "-",
+                      "0","1"))
+data$Y_2011 <- as.numeric(ifelse(data$`2011`== "-",
+                        "0","1"))
+data$Y_2012 <- as.numeric(ifelse(data$`2012`== "-",
+                      "0","1"))
+data$Y_2013 <- as.numeric(ifelse(data$`2013`== "-",
+                      "0","1"))
+data$Y_2014 <- as.numeric(ifelse(data$`2014`== "-",
+                      "0","1"))    
+
+
 
 ##Extract HTML code from links
 site <- html(urls)
@@ -77,6 +99,15 @@ levels(d2$D_2015) <- c(levels(d2$D_2015), "Vapaa")
 d2$D_2015[d2$D_2015 == '-'] <- 'Vapaa'
 droplevels(d2$D_2015)
 
+d3<-d2%>%
+      rowwise()%>%
+      mutate(n=(Y_2006+Y_2007+Y_2008+Y_2009+Y_2010+Y_2011+Y_2012+Y_2013+Y_2014))
+ungroup(d3) 
+
+d2<-cbind(d2,d3$n)
+d2$n<-d2$`d3$n`
+
+
 #Convert to spatial data 
 sp_data <- SpatialPointsDataFrame(coords=dplyr::select(d2, Long, Lat),
                                   data=d2, proj4string=CRS("+init=epsg:2393"))
@@ -85,6 +116,8 @@ sp_data_wgs84 <- spTransform(sp_data, CRS("+init=epsg:4326"))
 
 #create color palette for factor data
 pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
+pal2<-colorNumeric("Set2",domain=NULL)
+
 
 # make a leaflet plot for data, plot wheter line transect is available or not, 
 # add popåups, line transect map and form 
@@ -92,10 +125,38 @@ paikka<-sp_data_wgs84$Kunta
 urli<-sp_data_wgs84$map_pdf_url
 formi<-sp_data_wgs84$form_pdf_url
 
+
+####VANHAA
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
       addCircleMarkers(radius= 1,color = ~pal(D_2015),
                        popup=(paste0("<a href=", urli , ">", paikka,"</a>","<br />","<a href=", formi , ">","Maastolomake" ,"</a>")))
+
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius= 1,color = ~pal2(d2$n),
+                       popup=(paste0("<a href=", urli , ">", paikka,"</a>","<br />","<a href=", formi , ">","Maastolomake" ,"</a>")))
+
+sp_data_wgs84$n2<-as.factor(sp_data_wgs84$n)
+pal <- colorFactor(c("red", "pink","orange","yellow","green","blue","black","navy","purple"), 
+                   domain = sp_data_wgs84$n2)
+
+####UUTTA
+
+pal <- colorFactor(c("#d73027", "#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850"), 
+domain = sp_data_wgs84$n2)
+
+
+
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="var",0,2) 
+                             ,color = ~pal(n2),
+                       popup=(paste0("<a href=", urli , ">", paikka,"</a>",
+                                     "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
+                                     sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
+
+droplevels(sp_data_wgs84$D_2015)
 
 
 ##################################################

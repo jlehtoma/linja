@@ -1,4 +1,5 @@
 devtools::install_github("rstudio/leaflet")
+init()
 
 library("dplyr")
 library("magrittr")
@@ -147,6 +148,20 @@ paikka<-sp_data_wgs84$Kunta
 urli<-sp_data_wgs84$map_pdf_url
 formi<-sp_data_wgs84$form_pdf_url
 
+###PLOT THE DATA
+#palette with data as numeric, use index that was calculated to different lines
+#darker colors indicates transects with less counts and longer time since the last coun
+
+pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4), 
+                       color = ~pal4(index),
+                       opacity=30,popup=(paste0("<a href=", urli , ">", paikka,"</a>",
+                                                "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
+                                                sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
+
+
 
 ####Booked or free transect
 ##This works 
@@ -157,7 +172,6 @@ leaflet(sp_data_wgs84) %>%
 
 
 ###This piece of shit does not. Cant get the HTML park to function.
-pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
       addCircleMarkers(radius= 1,color = ~pal(D_2015),
@@ -185,17 +199,7 @@ leaflet(sp_data_wgs84) %>%
                                      "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
                                      sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
 
-#palette with data as numeric, use index that was calculated to different lines
-#darker colors indicates transects with less counts and longer time since the last coun
 
-pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4), 
-                       color = ~pal4(index),
-                       opacity=30,popup=(paste0("<a href=", urli , ">", paikka,"</a>",
-                                                "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
-                                                sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
 
 
 

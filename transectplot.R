@@ -23,7 +23,7 @@ data<-data[-567,]
 
 #Change the crappy names for variables
 data$D_2015<-as.factor(data$`2015`)
-data$Kunta<-data$`Kunta ja reitin nimi`
+data$Kunta<-iconv(data$`Kunta ja reitin nimi`)
 
 data$Y_2006 <- as.numeric(ifelse(data$`2006`== "-",
                       "0","1"))

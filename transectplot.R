@@ -17,6 +17,9 @@ data<-taulukko %>%
       html_node("table")%>%
       html_table()
 
+#Remove last empty row
+data<-data[-567,]
+
 #Change the crappy names for variables
 data$D_2015<-as.factor(data$`2015`)
 data$Kunta<-data$`Kunta ja reitin nimi`
@@ -40,6 +43,36 @@ data$Y_2013 <- as.numeric(ifelse(data$`2013`== "-",
 data$Y_2014 <- as.numeric(ifelse(data$`2014`== "-",
                       "0","1"))    
 
+data$L_2006 <- as.numeric(ifelse(data$`2006`== "-",
+                                 "0","2006"))
+data$L_2007 <- as.numeric(ifelse(data$`2007`== "-",
+                                 "0","2007"))
+data$L_2008 <- as.numeric(ifelse(data$`2008`== "-",
+                                 "0","2008"))
+data$L_2009 <- as.numeric(ifelse(data$`2009`== "-",
+                                 "0","2009"))
+data$L_2010 <- as.numeric(ifelse(data$`2010`== "-",
+                                 "0","2010"))
+data$L_2011 <- as.numeric(ifelse(data$`2011`== "-",
+                                 "0","2011"))
+data$L_2012 <- as.numeric(ifelse(data$`2012`== "-",
+                                 "0","2012"))
+data$L_2013 <- as.numeric(ifelse(data$`2013`== "-",
+                                 "0","2013"))
+data$L_2014 <- as.numeric(ifelse(data$`2014`== "-",
+                                 "0","2014"))    
+
+
+##years from the last transect count
+last.count<-data%>%
+      rowwise()%>%
+      mutate(n=(Y_2006+Y_2007+Y_2008+Y_2009+Y_2010+Y_2011+Y_2012+Y_2013+Y_2014),
+             years_missing=11-n,
+             last=max(L_2006,L_2007,L_2008,L_2009,L_2010,L_2011,L_2012,L_2013,L_2014),
+             years_last=2015-last,
+             index=1.5*years_missing+years_last)
+      
+data<-last.count
 
 
 ##Extract HTML code from links
@@ -74,6 +107,9 @@ transect_data <- lapply(linjat_table[2:length(linjat_table)],
 # Create a data frame
 transect_data <- dplyr::bind_rows(transect_data) 
 
+#remove the last empty row
+transect_data<-transect_data[-567,]
+
 #combine two datasets
 d1<-cbind(data,transect_data) 
 
@@ -90,8 +126,6 @@ Koordinates$Long<-as.integer(as.character(Koordinates$Long))
 
 #Combine coordinates with rest of the data
 d2<-cbind(d1,Koordinates) 
-#Remove last empty row
-d2<-d2[-567,]
 
 #Create new level for status
 levels(d2$D_2015) <- c(levels(d2$D_2015), "Vapaa")
@@ -99,15 +133,6 @@ levels(d2$D_2015) <- c(levels(d2$D_2015), "Vapaa")
 #Replace empty with level "vapaa"
 d2$D_2015[d2$D_2015 == '-'] <- 'Vapaa'
 droplevels(d2$D_2015)
-
-d3<-d2%>%
-      rowwise()%>%
-      mutate(n=(Y_2006+Y_2007+Y_2008+Y_2009+Y_2010+Y_2011+Y_2012+Y_2013+Y_2014))
-ungroup(d3) 
-
-d2<-cbind(d2,d3$n)
-d2$n<-d2$`d3$n`
-
 
 #Convert to spatial data 
 sp_data <- SpatialPointsDataFrame(coords=dplyr::select(d2, Long, Lat),
@@ -124,17 +149,26 @@ formi<-sp_data_wgs84$form_pdf_url
 
 
 ####Booked or free transect
+##This works 
+pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius= 1,color = ~pal(D_2015))
+
+
+###This piece of shit does not. Cant get the HTML park to function.
 pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
       addCircleMarkers(radius= 1,color = ~pal(D_2015),
-                       popup=(paste0("<a href=", urli , ">", paikka,"</a>"))),"<br />","<a href=", formi , ">", "Maastolomake" ,"</a>")))
+                       popup=(paste0("<a href=", urli , ">", paikka,"</a>","<br />","<a href=", formi , ">", "Maastolomake" ,"</a>")))
 
 
 ####How many times a transect line has been counted and wheter it is booked for this year or not. 
 ## Something wrong with the popups, the HTML code does not work. Stopped working after shiny installation and uppdating of htmlwidgets.
 
 sp_data_wgs84$n2<-as.factor(sp_data_wgs84$n)
+
 
 #palette with data as factors
 pal3 <- colorFactor(c("#d73027", "#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850"), 
@@ -151,148 +185,36 @@ leaflet(sp_data_wgs84) %>%
                                      "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
                                      sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
 
+#palette with data as numeric, use index that was calculated to different lines
+#darker colors indicates transects with less counts and longer time since the last coun
 
-##################################################
-#####end of code rest is blubber.
-##################################################
-
-
-
-
-
+pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
-      addCircleMarkers(radius= 1,color = ~pal(2015),popup='<a href="">Link</a>')
+      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4), 
+                       color = ~pal4(index),
+                       opacity=30,popup=(paste0("<a href=", urli , ">", paikka,"</a>",
+                                                "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
+                                                sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
+
+
+
+##Using index, darker colors indicates transects with less counts and longer time since the last count
+pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius=3, 
+                       color = ~pal4(index))
+                       
+##Using missing years, darker colors indicates transects with few counts
+pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$years_missing)
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius=3, 
+                       color = ~pal4(years_missing))
 
 
 
 
-
-data<-read.csv("c:/HY-Data/VALIMAKI/Vilppu/Museo/linjalaskenta.csv",header=TRUE,sep=";")
-sp_data <- SpatialPointsDataFrame(coords=dplyr::select(data, Long, Lat),
-                                  data=data, proj4string=CRS("+init=epsg:2393"))
-
-sp_data_wgs84 <- spTransform(sp_data, CRS("+init=epsg:4326"))
-
-
-
-
-
-
-library("dplyr")
-library("magrittr")
-library("rvest")
-
-urls <- c("http://koivu.luomus.fi/seurannat/linjalaskenta/vakiolinjat.php")
-
-site <- html(urls)
-linjat_table <- site %>%
-      html_node("table") %>%
-      html_nodes("tr")
-
-extract_urls <- function(x) {
-      # Create an empty list to hold the results
-      transect_data <- list()
-      # Get all table data nodes from a single row
-      td_nodes <- html_nodes(x, "td")
-      # Extract the transect ID
-      transect_data[["id"]] <- html_text(td_nodes[[1]])
-      # Extract kansalaisen karttapaikka link
-      transect_data[["map_url"]] <- html_attr(html_node(td_nodes[[13]], "a"),
-                                              "href")
-      # Extract kartta pdf link
-      transect_data[["map_pdf_url"]] <- html_attr(html_node(td_nodes[[15]], "a"),
-                                                  "href")
-      # Extract form pdf link
-      transect_data[["form_pdf_url"]] <- html_attr(html_node(td_nodes[[16]], "a"),
-                                                   "href")
-      # Coerce the list to data frame
-      return(dplyr::as_data_frame(transect_data))
-}
-
-# Skip the first row (it's the header)
-transect_data <- lapply(linjat_table[2:length(linjat_table)],
-                        function(x) {return(extract_urls(x))})
-# Create a data frame
-transect_data <- dplyr::bind_rows(transect_data) 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-scrape_data <- function(url) {
-      message("Scraping page ", url)
-      # Get the overall page structure
-      site <- html(url)
-      team_name <- site %>%
-            html_nodes(xpath="//th)") %>%
-            html_text()
-      # Collate everything into a data frame
-      dat <- list(team_name)
-      return(dat)
-}
-
-
-library(rvest)
-lego_movie <- html("http://www.imdb.com/title/tt1490017/")
-
-lego_movie %>% 
-      html_node("a span") %>%
-      html_text() %>%
-      as.numeric()
-
-lego_movie %>%
-      html_nodes("#titleCast .itemprop span") %>%
-      html_text()
-
-
-
-Reitin<br>no.<th>Reitin<br>no.</th> #vr > tbody:nth-child(1) > tr:nth-child(1) > th:nth-child(1)
-      
-      # Remove unnecessary cruft
-      team_name <- gsub(" Fundraising Page", "", team_name)
-target <- site %>%
-      html_nodes(xpath="//div//p//em") %>%
-      extract2(1) %>%
-      html_text()
-# Not very elegant, but get the sum based on hard coded location
-target <- unlist(strsplit(target, "\\s+"))[4]
-sum_raised <- site %>%
-      html_nodes(xpath="//div//p//span[@class='raised-so-far']") %>%
-      html_text()
-perc_raised <- site %>%
-      html_nodes(xpath="//div//strong//em") %>%
-      extract2(1) %>%
-      html_text()
-n_donations <- site %>%
-      html_nodes(xpath="//div//p//span[@class='number-of-donations']") %>%
-      html_text() %>%
-      as.numeric()
-# Collate everything into a data frame
-dat <- data.frame(team_name, target, sum_raised, perc_raised, n_donations,
-                  stringsAsFactors=FALSE)
-return(dat)
-}
-
-# Get a list of parsed data
-donations_data <- lapply(urls, scrape_data)
-# Bind data frames in the list into a single data frame
-donations_data <- bind_rows(donations_data)
 
 

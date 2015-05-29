@@ -1,4 +1,6 @@
-devtools::install_github("rstudio/leaflet")
+##devtools::install_github("rstudio/leaflet")
+#init()
+#sessionInfo()
 
 library("dplyr")
 library("magrittr")
@@ -7,12 +9,13 @@ library(maps)
 library(rgdal)
 library(leaflet)
 library(htmlwidgets)
+#library(packrat)
 
 #Get the url for the table
 urls <- c("http://koivu.luomus.fi/seurannat/linjalaskenta/vakiolinjat.php")
 
 #Scrape the table
-taulukko <- html(urls)
+taulukko <- html(urls, encoding="UTF-8")
 data<-taulukko %>%
       html_node("table")%>%
       html_table()
@@ -21,8 +24,9 @@ data<-taulukko %>%
 data<-data[-567,]
 
 #Change the crappy names for variables
-data$D_2015<-as.factor(data$`2015`)
-data$Kunta<-iconv(data$`Kunta ja reitin nimi`)
+data$D_2015 <- as.factor(data$`2015`)
+data$Kunta <- data$`Kunta ja reitin nimi`
+
 
 data$Y_2006 <- as.numeric(ifelse(data$`2006`== "-",
                       "0","1"))
@@ -143,78 +147,24 @@ sp_data_wgs84 <- spTransform(sp_data, CRS("+init=epsg:4326"))
 
 # make a leaflet plot for data, plot wheter line transect is available or not, 
 # add popups, line transect map and form 
-paikka<-sp_data_wgs84$Kunta
+paikka <- sp_data_wgs84$Kunta
 urli<-sp_data_wgs84$map_pdf_url
 formi<-sp_data_wgs84$form_pdf_url
 
-
-####Booked or free transect
-##This works 
-pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius= 1,color = ~pal(D_2015))
-
-
-###This piece of shit does not. Cant get the HTML park to function.
-pal<-colorFactor("Set1",domain=NULL,na.color = "#808080")
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius= 1,color = ~pal(D_2015),
-                       popup=(paste0("<a href=", urli , ">", paikka,"</a>","<br />","<a href=", formi , ">", "Maastolomake" ,"</a>")))
-
-
-####How many times a transect line has been counted and wheter it is booked for this year or not. 
-## Something wrong with the popups, the HTML code does not work. Stopped working after shiny installation and uppdating of htmlwidgets.
-
-sp_data_wgs84$n2<-as.factor(sp_data_wgs84$n)
-
-
-#palette with data as factors
-pal3 <- colorFactor(c("#d73027", "#f46d43","#fdae61","#fee08b","#ffffbf","#d9ef8b","#a6d96a","#66bd63","#1a9850"), 
-domain = sp_data_wgs84$n2)
-
-
-#Map where small circles indicate booked line transect, large ones free transects
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4) 
-                             ,color = ~pal3(n2),
-                       opacity=30,
-                       popup=(paste0("<a href=", urli , ">", paikka,"</a>",
-                                     "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
-                                     sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
-
-#palette with data as numeric, use index that was calculated to different lines
-#darker colors indicates transects with less counts and longer time since the last coun
+###PLOT THE DATA
+#palette with data as numeric, using index 
+#larger circles are free transects, small ones are booked
+#darker colors indicates transects with less counts and longer time since the last count
 
 pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
 leaflet(sp_data_wgs84) %>% 
       addTiles()%>%
       addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4), 
                        color = ~pal4(index),
-                       opacity=30,popup=(paste0("<a href=", urli , ">", paikka,"</a>",
-                                                "<br />","<a href=", formi , ">","Maastolomake" ,"</a>","<br />", 
-                                                sp_data_wgs84$n2,"<br />",sp_data_wgs84$D_2015)))
-
-
-
-##Using index, darker colors indicates transects with less counts and longer time since the last count
-pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius=3, 
-                       color = ~pal4(index))
-                       
-##Using missing years, darker colors indicates transects with few counts
-pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$years_missing)
-leaflet(sp_data_wgs84) %>% 
-      addTiles()%>%
-      addCircleMarkers(radius=3, 
-                       color = ~pal4(years_missing))
-
-
-
-
-
+                       opacity=30,
+                       popup = paste0("<a href=", urli , ">", "Linjan kartta","</a>",
+                              "<br />","<a href=", formi , ">","Maastolomake" ,"</a>",
+                              "<br />", "Laskentakertoja: ", sp_data_wgs84$n,
+                              "<br />", "Viimeksi laskettu: ", sp_data_wgs84$last,
+                              "<br />",sp_data_wgs84$D_2015))
 

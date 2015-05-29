@@ -1,0 +1,173 @@
+```{r setup, echo=FALSE, message=FALSE}
+library("dplyr")
+library("magrittr")
+library("rvest")
+library(maps)
+library(rgdal)
+library(leaflet)
+library(htmlwidgets)
+```
+
+```{r, echo=FALSE, message=FALSE}
+
+#Get the url for the table
+urls <- c("http://koivu.luomus.fi/seurannat/linjalaskenta/vakiolinjat.php")
+
+#Scrape the table
+taulukko <- html(urls, encoding="UTF-8")
+data<-taulukko %>%
+      html_node("table")%>%
+      html_table()
+
+#Remove last empty row
+data<-data[-567,]
+
+# Dummy comment
+
+#Change the crappy names for variables
+data$D_2015 <- as.factor(data$`2015`)
+data$Kunta <- data$`Kunta ja reitin nimi`
+
+
+data$Y_2006 <- as.numeric(ifelse(data$`2006`== "-",
+                      "0","1"))
+data$Y_2007 <- as.numeric(ifelse(data$`2007`== "-",
+                      "0","1"))
+data$Y_2008 <- as.numeric(ifelse(data$`2008`== "-",
+                      "0","1"))
+data$Y_2009 <- as.numeric(ifelse(data$`2009`== "-",
+                      "0","1"))
+data$Y_2010 <- as.numeric(ifelse(data$`2010`== "-",
+                      "0","1"))
+data$Y_2011 <- as.numeric(ifelse(data$`2011`== "-",
+                        "0","1"))
+data$Y_2012 <- as.numeric(ifelse(data$`2012`== "-",
+                      "0","1"))
+data$Y_2013 <- as.numeric(ifelse(data$`2013`== "-",
+                      "0","1"))
+data$Y_2014 <- as.numeric(ifelse(data$`2014`== "-",
+                      "0","1"))    
+
+data$L_2006 <- as.numeric(ifelse(data$`2006`== "-",
+                                 "0","2006"))
+data$L_2007 <- as.numeric(ifelse(data$`2007`== "-",
+                                 "0","2007"))
+data$L_2008 <- as.numeric(ifelse(data$`2008`== "-",
+                                 "0","2008"))
+data$L_2009 <- as.numeric(ifelse(data$`2009`== "-",
+                                 "0","2009"))
+data$L_2010 <- as.numeric(ifelse(data$`2010`== "-",
+                                 "0","2010"))
+data$L_2011 <- as.numeric(ifelse(data$`2011`== "-",
+                                 "0","2011"))
+data$L_2012 <- as.numeric(ifelse(data$`2012`== "-",
+                                 "0","2012"))
+data$L_2013 <- as.numeric(ifelse(data$`2013`== "-",
+                                 "0","2013"))
+data$L_2014 <- as.numeric(ifelse(data$`2014`== "-",
+                                 "0","2014"))    
+
+
+##years from the last transect count
+last.count<-data%>%
+      rowwise()%>%
+      mutate(n=(Y_2006+Y_2007+Y_2008+Y_2009+Y_2010+Y_2011+Y_2012+Y_2013+Y_2014),
+             years_missing=11-n,
+             last=max(L_2006,L_2007,L_2008,L_2009,L_2010,L_2011,L_2012,L_2013,L_2014),
+             years_last=2015-last,
+             index=1.5*years_missing+years_last)
+      
+data<-last.count
+
+
+##Extract HTML code from links
+site <- html(urls)
+linjat_table <- site %>%
+      html_node("table") %>%
+      html_nodes("tr")
+
+extract_urls <- function(x) {
+      # Create an empty list to hold the results
+      transect_data <- list()
+      # Get all table data nodes from a single row
+      td_nodes <- html_nodes(x, "td")
+      # Extract the transect ID
+      transect_data[["id"]] <- html_text(td_nodes[[1]])
+      # Extract kansalaisen karttapaikka link
+      transect_data[["map_url"]] <- html_attr(html_node(td_nodes[[13]], "a"),
+                                              "href")
+      # Extract kartta pdf link
+      transect_data[["map_pdf_url"]] <- html_attr(html_node(td_nodes[[15]], "a"),
+                                                  "href")
+      # Extract form pdf link
+      transect_data[["form_pdf_url"]] <- html_attr(html_node(td_nodes[[16]], "a"),
+                                                   "href")
+      # Coerce the list to data frame
+      return(dplyr::as_data_frame(transect_data))
+}
+
+# Skip the first row (it's the header)
+transect_data <- lapply(linjat_table[2:length(linjat_table)],
+                        function(x) {return(extract_urls(x))})
+# Create a data frame
+transect_data <- dplyr::bind_rows(transect_data) 
+
+#remove the last empty row
+transect_data<-transect_data[-567,]
+
+#combine two datasets
+d1<-cbind(data,transect_data) 
+
+#Split coordinate file
+
+Koordinates <- data.frame(do.call('rbind', strsplit(as.character(d1$YKJ),':',fixed=TRUE)))
+
+Koordinates<-
+      Koordinates%>%
+      rename(Lat = X1)%>%
+      rename(Long=X2)
+Koordinates$Lat<-as.integer(as.character(Koordinates$Lat))
+Koordinates$Long<-as.integer(as.character(Koordinates$Long))
+
+#Combine coordinates with rest of the data
+d2<-cbind(d1,Koordinates) 
+
+#Create new level for status
+levels(d2$D_2015) <- c(levels(d2$D_2015), "Vapaa")
+
+#Replace empty with level "vapaa"
+d2$D_2015[d2$D_2015 == '-'] <- 'Vapaa'
+d2$D_2015 <- droplevels(d2$D_2015)
+
+#Convert to spatial data 
+sp_data <- SpatialPointsDataFrame(coords=dplyr::select(d2, Long, Lat),
+                                  data=d2, proj4string=CRS("+init=epsg:2393"))
+#Fix coordinates
+sp_data_wgs84 <- spTransform(sp_data, CRS("+init=epsg:4326"))
+
+
+# make a leaflet plot for data, plot wheter line transect is available or not, 
+# add popups, line transect map and form 
+paikka <- sp_data_wgs84$Kunta
+urli<-sp_data_wgs84$map_pdf_url
+formi<-sp_data_wgs84$form_pdf_url
+
+###PLOT THE DATA
+#palette with data as numeric, using index 
+#larger circles are free transects, small ones are booked
+#darker colors indicates transects with less counts and longer time since the last count
+
+pal4 <- colorNumeric("YlOrRd",domain = sp_data_wgs84$index)
+leaflet(sp_data_wgs84) %>% 
+      addTiles()%>%
+      addCircleMarkers(radius=ifelse(sp_data_wgs84$D_2015=="Var",0,4), 
+                       color = ~pal4(index),
+                       opacity=30,
+                       popup = paste0("<a href=", urli , ">", "Linjan kartta","</a>",
+                              "<br />","<a href=", formi , ">","Maastolomake" ,"</a>",
+                              "<br />", "Laskentakertoja: ", sp_data_wgs84$n,
+                              "<br />", "Viimeksi laskettu: ", sp_data_wgs84$last,
+                              "<br />",sp_data_wgs84$D_2015))
+```
+
+
